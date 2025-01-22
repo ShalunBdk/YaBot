@@ -10,10 +10,6 @@ class Yandex360:
     """Class for handling various utility operations."""
 
     def __init__(self):
-        self.headers = {
-            "Authorization": f"OAuth {settings.API_TOKEN}",
-            "Content-Type": "application/json",
-        }
         self.headers_360 = {"Authorization": f"OAuth {settings.API_TOKEN_360}"}
 
     def _make_yandex_request(self, endpoint: str, method: str = 'get', data: Dict = None) -> Dict:

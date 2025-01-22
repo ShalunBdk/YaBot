@@ -1,11 +1,10 @@
 import logging
+import pytz
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Tuple, Union
 from ldap3 import Server, Connection, ALL
 
 from config import settings
-from services.utils import Utilities
-from services.yandex_service import Yandex360
 
 from exceptions import AccessException
 
@@ -18,13 +17,17 @@ class ADConnector:
         self.server = Server(settings.AD_SERVER, get_info=ALL)
         self.base_dn = settings.AD_BASE_DN
         self._dc_addresses = [
-            'dc-nsk2.tion.local'
-            # 'dc-nsk3.tion.local',
-            # 'dc-bsk2.tion.local',
-            # 'dc-msk-um2.tion.local',
-            # 'dc-msk.tion.local',
-            # 'dc-msk3.tion.local'
+            'dc-nsk2.tion.local',
+            'dc-nsk3.tion.local',
+            'dc-bsk2.tion.local',
+            'dc-msk-um2.tion.local',
+            'dc-msk.tion.local',
+            'dc-msk3.tion.local'
         ]
+        # Кэш для хранения результатов проверки админских прав
+        self._admin_cache: Dict[str, Tuple[bool, datetime]] = {}
+        # Время жизни кэша (в часах)
+        self._admin_cache_ttl = 1
 
     def _get_connection(self, use_ssl: bool = False, for_password_change: bool = False) -> Connection:
         """Creates and returns a new AD connection."""
@@ -38,6 +41,14 @@ class ADConnector:
             server = self.server if not use_ssl else Server(settings.AD_SERVER, get_info=ALL, use_ssl=True)
         logging.debug(f'Обращение к {server}')
         return Connection(server, user=user, password=password, auto_bind=True)
+
+    def _is_cache_valid(self, cache_time: datetime) -> bool:
+        """Проверяет, не истек ли срок действия кэша."""
+        return datetime.now() - cache_time < timedelta(hours=self._admin_cache_ttl)
+
+    def _get_admin_group_dn(self) -> str:
+        """Возвращает DN группы администраторов."""
+        return "CN=IT Техническая поддержка,OU=Security Groups,OU=MyBusiness,DC=tion,DC=local"
 
     def get_password_expiry_date(self, login: str) -> str:
         """Returns the password expiry date for a user."""
@@ -186,7 +197,7 @@ class ADConnector:
         """Gets users whose passwords will expire in the specified number of days."""
         try:
             with self._get_connection() as conn:
-                now = datetime.now(timezone.utc)
+                now = datetime.now(pytz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
                 expiration_cutoff_date = now + timedelta(days=days)
 
                 conn.search(
@@ -197,12 +208,10 @@ class ADConnector:
                 )
 
                 expiring_users = []
-
+                logging.debug(f"Поиск пользователей с паролем истекающим в близжайшие {days} дней")
                 for entry in conn.entries:
-                    logging.debug(f"Поиск пользователей с паролем истекающим в близжайшие {days} дней")
                     pwd_last_set = entry.pwdLastSet.value
-                    password_expiry_date = pwd_last_set + timedelta(days=90)
-
+                    password_expiry_date = (pwd_last_set + timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
                     if now <= password_expiry_date <= expiration_cutoff_date:
                         expiring_users.append({
                             "username": entry.sAMAccountName,
@@ -344,14 +353,23 @@ class ADConnector:
             return f"Ошибка смены пароля: {e}"
         
     def check_admin(self, user_login: str):
-        access_error_msg = ""
-
-        if not self.user_in_group(
-            user_login.split("@")[0],
-            "CN=IT Техническая поддержка,OU=Security Groups,OU=MyBusiness,DC=tion,DC=local",
-        ):
-            access_error_msg = (
-                f"Access Error: {user_login} not admin"
-            )
-        if access_error_msg:
+        username = user_login.split("@")[0]
+        # Проверяем кэш
+        if username in self._admin_cache:
+            is_admin, cache_time = self._admin_cache[username]
+            if self._is_cache_valid(cache_time):
+                if not is_admin:
+                    raise AccessException()
+                return
+        
+        # Если кэша нет или он устарел, проверяем через AD
+        try:
+            is_admin = self.user_in_group(username, self._get_admin_group_dn())
+            # Обновляем кэш
+            self._admin_cache[username] = (is_admin, datetime.now())
+            
+            if not is_admin:
+                raise AccessException()
+            
+        except Exception as e:
             raise AccessException()

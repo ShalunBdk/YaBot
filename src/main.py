@@ -1,10 +1,14 @@
 import logging
 from pathlib import Path
 import sys
+import threading
+import time
+import schedule
 from yandex_bot import Client, Message
 from services.ad_service import ADConnector
 from services.utils import Utilities
 from services.yandex_service import Yandex360
+from services.password_checker import PasswordExpiryChecker
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -19,6 +23,8 @@ ad = ADConnector(ya360, utils)
 
 template = Template(bot, ya360, utils, ad)
 menu = MenuTemplate(bot, ya360, utils, ad)
+
+passchecker = PasswordExpiryChecker(bot, ad, utils)
 
 @bot.unhandled_message()
 def unhandled(message: Message):
@@ -100,6 +106,42 @@ def command_start(message):
 def disable_2fa_phone_yandex(message):
     template.disable_2fa_yandex(message)
 
+def run_password_checker(bot, ad_connector, utilities):
+    """Запускает проверку паролей в отдельном потоке"""
+    checker = PasswordExpiryChecker(bot, ad_connector, utilities)
+    
+    # Поток для обработки очереди уведомлений
+    notification_thread = threading.Thread(
+        target=checker.process_notification_queue,
+        daemon=True
+    )
+    notification_thread.start()
+    
+    # Планировщик проверки паролей
+    schedule.every().day.at("09:00").do(checker.check_expiring_passwords)
+    
+    # Поток для планировщика
+    def run_scheduler():
+        while True:
+            schedule.run_pending()
+            time.sleep(60)
+    
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+    
+    return checker, notification_thread, scheduler_thread
 
-logging.basicConfig(level=logging.INFO)
-bot.run()
+def run_test_check(checker):
+    """Запускает тестовую проверку паролей"""
+    print("Запуск тестовой проверки паролей...")
+    checker.check_expiring_passwords()
+    
+    # Ждем обработки всех уведомлений
+    checker.notification_queue.join()
+    print("Тестовая проверка завершена")
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    checker, notif_thread, sched_thread = run_password_checker(bot, ad, utils)
+    run_test_check(checker)
+    bot.run()

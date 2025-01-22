@@ -13,12 +13,6 @@ class Utilities:
     """Class for handling various utility operations."""
 
     def __init__(self):
-        self.base_url = "https://botapi.messenger.yandex.net/bot/v1/"
-        self.headers = {
-            "Authorization": f"OAuth {settings.API_TOKEN}",
-            "Content-Type": "application/json",
-        }
-        self.headers_360 = {"Authorization": f"OAuth {settings.API_TOKEN_360}"}
         self.words = [
             "air",
             "clean",
