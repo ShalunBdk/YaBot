@@ -54,8 +54,7 @@ class PasswordExpiryChecker:
             
             self.bot.send_message(
                 message,
-                # user_data['username'],
-                'shalin-ar@tion.ru',
+                f'{user_data['username']}@tion.ru',
                 inline_keyboard=[
                     Button(text="🔐 Как сменить пароль?", phrase="reset_password_instruction"),
                     Button(text="🔄 Сброс пароля", phrase="self_res_pass")

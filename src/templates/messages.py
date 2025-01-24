@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import logging
 from yandex_bot import Client, Button
 
 from exceptions import AccessException
@@ -42,6 +43,7 @@ class Template:
         self.user_main_menu = [
             Button(text="❔ информация", phrase="info"),
             Button(text="🔑 пароль", phrase="password"),
+            Button(text="💡 Предложить идею / 🐞 Сообщить о баге", phrase="send_idea"),
         ]
     
     def get_session(self, user_id):
@@ -132,9 +134,10 @@ class Template:
                       "```🛂 active directory``` функции связанные с AD(Посмотреть пользователей у которых закончился или скоро закончится пароль)")
             keyboard = self.admin_main_menu
         else:
-            message = ("\n\nЭто бот IT Службы, который может отвечать на некоторые команды."
+            message = ("\n\nЭто бот IT Службы, который напоминает о смене пароля и может отвечать на некоторые вопросы."
                       "\n\n**Команды:**"
-                      "\n\n```🔑 пароль``` - покажет срок действия вашего пароля")
+                      "\n\n```🔑 пароль``` - покажет срок действия вашего пароля"
+                      "\n\n```💡 Предложить идею / 🐞 Сообщить о баге``` - отправить сообщение разработчику")
             keyboard = self.user_main_menu
             
         self.bot.send_message(message, user_login, inline_keyboard=keyboard)
@@ -187,7 +190,7 @@ class Template:
         account_name = session.get('account_name')
         password = self.utils.generate_random_string()
         session['password'] = password
-        # self.ad.change_password(account_name, password)
+        self.ad.change_password(account_name, password)
         self.bot.send_message(
             f'Пароль {account_name} сброшен на **{password}**\nХотите отправить новый пароль {account_name} в мессенджер?',
             message.user.login,
@@ -196,6 +199,7 @@ class Template:
                 Button(text="❌ Нет", phrase="main_menu"),
             ]
         )
+        logging.info(f'{message.user.login} сбросил пароль для {account_name}')
 
     def reset_password_notify(self, message):
         session = self.get_session(message.user.login)
@@ -292,12 +296,13 @@ class Template:
         else:
             keyboard = self.user_main_menu
         password = self.utils.generate_random_string()
-        # self.ad.change_password(message.user.login.split("@")[0], password)
+        self.ad.change_password(message.user.login.split("@")[0], password)
         self.bot.send_message(
             f'Ваш новый пароль **{password}**',
             message.user.login,
             inline_keyboard=keyboard
         )
+        logging.info(f'{message.user.login} сбросил свой пароль')
 
     def disable_2fa_yandex(self, message):
         try:
@@ -332,6 +337,18 @@ class Template:
                 message.user.login,
                 inline_keyboard=self.admin_main_menu
             )
+
+    def send_idea_finally(self, message):
+        self.bot.send_message(
+            f'💡 Новое сообщение от {message.user.login}'
+            f'\n\n{message.text}',
+            chat_id='0/0/7a69ddd0-8e49-4f1a-966d-927fc89ddb89'
+        )
+        self.bot.send_message(
+            'Сообщение отправлено',
+            message.user.login,
+            inline_keyboard=self.user_main_menu
+        )
 
     def _format_expired_users_list(self, users: list) -> str:
         """

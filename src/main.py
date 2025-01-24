@@ -1,8 +1,10 @@
 import logging
+import os
 from pathlib import Path
 import sys
 import threading
 import time
+import requests
 import schedule
 from yandex_bot import Client, Message
 from services.ad_service import ADConnector
@@ -103,8 +105,16 @@ def command_start(message):
 def command_start(message):
     template.show_yandex_blocked_users(message.user.login)
 
+@bot.on_message(phrase="send_idea")
+def command_start(message):
+    bot.send_message("Распишите вашу идею или опишите баг с которым столкнулись", message.user.login)
+    bot.register_next_step_handler(message.user.login, send_idea_finally)
+
 def disable_2fa_phone_yandex(message):
     template.disable_2fa_yandex(message)
+
+def send_idea_finally(message):
+    template.send_idea_finally(message)
 
 def run_password_checker(bot, ad_connector, utilities):
     """Запускает проверку паролей в отдельном потоке"""
@@ -140,8 +150,28 @@ def run_test_check(checker):
     checker.notification_queue.join()
     print("Тестовая проверка завершена")
 
+def watchdog(main_thread):
+    while True:
+        if not main_thread.is_alive():
+            logging.error("Main thread died, restarting application")
+            os._exit(1)  # Принудительный перезапуск
+        time.sleep(60)  # Проверка каждую минуту
+
+def main():
+    try:
+        bot.run()
+    except requests.exceptions as e:
+        logging.error(f"Ошибка сети: {e}")
+        time.sleep(10)  # Ждем перед повторной попыткой
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     checker, notif_thread, sched_thread = run_password_checker(bot, ad, utils)
-    run_test_check(checker)
-    bot.run()
+    # run_test_check(checker)
+    main_thread = threading.Thread(target=main)
+    main_thread.start()
+    
+    watchdog_thread = threading.Thread(target=watchdog, args=(main_thread,))
+    watchdog_thread.daemon = True
+    watchdog_thread.start()
+    
