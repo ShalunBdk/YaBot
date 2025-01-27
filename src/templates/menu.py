@@ -4,7 +4,7 @@ from services.ad_service import ADConnector
 from services.utils import Utilities
 from services.yandex_service import Yandex360
 
-from src.templates.messages import Template
+from templates.messages import Template
 
 class MenuTemplate(Template):
 

@@ -14,9 +14,9 @@ from services.password_checker import PasswordExpiryChecker
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.config import settings
-from src.templates.messages import Template
-from src.templates.menu import MenuTemplate
+from config import settings
+from templates.messages import Template
+from templates.menu import MenuTemplate
 
 bot = Client(settings.YANDEX_BOT_TOKEN)
 ya360 = Yandex360()
