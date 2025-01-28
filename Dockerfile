@@ -5,4 +5,4 @@ WORKDIR /app
 COPY ./src .
 RUN pip install -r requirements.txt
 
-CMD [ "python", "/src/bot.py"]
+CMD [ "python", "/src/main.py"]
