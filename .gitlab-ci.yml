@@ -1,0 +1,27 @@
+stages:
+  - build
+  - lint_format
+  - deploy
+
+variables:
+  GIT_STRATEGY: fetch
+  APP_IMAGE: "${YANDEX_REGISTRY}/infra/yandex-bot-new"
+
+default:
+  tags:
+    - nsk-shell
+
+yabot build:
+  stage: build
+  script:
+    - docker build -t ${APP_IMAGE} .
+    - docker push ${APP_IMAGE}
+
+yabot deploy:
+  stage: deploy
+  variables:
+    NOMAD_JOB: "deploy/jobs/yabot.nomad.hcl"
+  script:
+    - nomad validate --var="app_image=${APP_IMAGE}" --var="version=${CI_JOB_ID}"  ${NOMAD_JOB}
+    - nomad plan     --var="app_image=${APP_IMAGE}" --var="version=${CI_JOB_ID}"  ${NOMAD_JOB} || if [ $? -eq 255 ]; then exit 255; else echo "success"; fi
+    - nomad run      --var="app_image=${APP_IMAGE}" --var="version=${CI_JOB_ID}"  ${NOMAD_JOB}
