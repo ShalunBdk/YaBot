@@ -160,8 +160,11 @@ def watchdog(main_thread):
 def main():
     try:
         bot.run()
-    except requests.exceptions as e:
+    except requests.exceptions.ConnectionError as e:
         logging.error(f"Ошибка сети: {e}")
+        time.sleep(10)  # Ждем перед повторной попыткой
+    except Exception as e:
+        logging.error(f"Ошибка: {e}")
         time.sleep(10)  # Ждем перед повторной попыткой
 
 if __name__ == "__main__":
