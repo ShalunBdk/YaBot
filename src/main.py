@@ -168,7 +168,13 @@ def main():
         time.sleep(10)  # Ждем перед повторной попыткой
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    # Задаем определенный формат времени
+    custom_time_format = '%Y-%m-%d %H:%M:%S'
+
+    # Производим общую настройку логирования
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s – %(message)s',
+                        datefmt=custom_time_format)
     checker, notif_thread, sched_thread = run_password_checker(bot, ad, utils)
     # run_test_check(checker)
     main_thread = threading.Thread(target=main)
