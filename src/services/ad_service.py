@@ -117,14 +117,26 @@ class ADConnector:
                     )
                     
                     if conn.entries:
-                        last_logon_raw = conn.entries[0].lastLogon.value
-                        if isinstance(last_logon_raw, datetime):
-                            last_logon_date = last_logon_raw
-                        else:
-                            last_logon_date = datetime(1601, 1, 1) + timedelta(microseconds=int(last_logon_raw) / 10)
-                        logging.debug(f'Последний вход {login} на {dc} {last_logon_date}')
-                        if not max_last_logon or last_logon_date > max_last_logon:
-                            max_last_logon = last_logon_date
+                        try:
+                            last_logon_raw = conn.entries[0].lastLogon.value
+                            min_date = datetime(1601, 1, 1, tzinfo=timezone.utc)
+
+                            if last_logon_raw is None:
+                                last_logon_date = min_date  # Устанавливаем минимальную дату
+                            elif isinstance(last_logon_raw, datetime):
+                                last_logon_date = last_logon_raw  # Если это уже datetime, используем его напрямую
+                            else:
+                                try:
+                                    # Преобразуем значение в datetime с указанием часового пояса UTC
+                                    last_logon_date = min_date + timedelta(microseconds=int(last_logon_raw) / 10)
+                                except (ValueError, TypeError):
+                                    # Если преобразование невозможно, устанавливаем минимальную дату
+                                    last_logon_date = min_date
+                            logging.debug(f'Последний вход {login} на {dc} {last_logon_date}')
+                            if not max_last_logon or last_logon_date > max_last_logon:
+                                max_last_logon = last_logon_date
+                        except Exception as e:
+                            logging.error(f"Ошибка при получении даты последнего входа {login} на {dc}: {e}")
 
             except Exception as e:
                 logging.error(f"Ошибка при подключении к контроллеру домена {dc}: {e}")
@@ -317,19 +329,25 @@ class ADConnector:
         try:
             with self._get_connection() as conn:
                 logging.debug(f"Поиск DN пользователя {login}")
-                search_filter = f"(userPrincipalName={login})"
-                conn.search(self.base_dn, search_filter, attributes=["distinguishedName"])
+                # search_filter = f"(userPrincipalName={login})"
+                # conn.search(self.base_dn, search_filter, attributes=["distinguishedName"])
+                if conn.search(
+                    self.base_dn,
+                    f"(sAMAccountName={login})",
+                    attributes=["distinguishedName"]
+                ):
+                    logging.debug(f"Ответ AD: {conn.entries}")
+                    if len(conn.entries) == 1:
+                        logging.debug(f"DN пользователя: {conn.entries[0].distinguishedName.value}")
+                        return conn.entries[0].distinguishedName.value
 
-                if len(conn.entries) == 1:
-                    return conn.entries[0].distinguishedName.value
+                    alias = self.ya360.get_user_alias(login)
+                    if alias:
+                        return self.get_user_dn(f"{alias}@tion.ru")
 
-                alias = self.ya360.get_user_alias(login)
-                if alias:
-                    return self.get_user_dn(f"{alias}@tion.ru")
-
-                raise ValueError(
-                    f"Пользователь с логином {login} не найден или найдено несколько записей."
-                )
+                    raise ValueError(
+                        f"Пользователь с логином {login} не найден или найдено несколько записей."
+                    )
         except Exception as e:
             raise ValueError(f"Ошибка при получении DN пользователя: {e}")
 
@@ -345,6 +363,7 @@ class ADConnector:
                     new_password=new_password
                 )
                 if conn.result["result"] == 0:
+                    logging.debug(f"Пароль пользователя {login} изменен")
                     return new_password
                 else:
                     logging.error(f"{conn.result['message']}")
