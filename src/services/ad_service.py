@@ -17,12 +17,8 @@ class ADConnector:
         self.server = Server(settings.AD_SERVER, get_info=ALL)
         self.base_dn = settings.AD_BASE_DN
         self._dc_addresses = [
-            'dc-nsk2.tion.local',
-            'dc-nsk3.tion.local',
-            'dc-bsk2.tion.local',
-            'dc-msk-um2.tion.local',
-            'dc-msk.tion.local',
-            'dc-msk3.tion.local'
+            'dc01.test.local',
+            'dc02.test.local',
         ]
         # Кэш для хранения результатов проверки админских прав
         self._admin_cache: Dict[str, Tuple[bool, datetime]] = {}
@@ -48,7 +44,7 @@ class ADConnector:
 
     def _get_admin_group_dn(self) -> str:
         """Возвращает DN группы администраторов."""
-        return "CN=IT Техническая поддержка,OU=Security Groups,OU=MyBusiness,DC=tion,DC=local"
+        return "CN=IT,OU=Security Groups,OU=MyBusiness,DC=test,DC=local"
 
     def get_password_expiry_date(self, login: str) -> str:
         """Returns the password expiry date for a user."""
@@ -343,7 +339,7 @@ class ADConnector:
 
                     alias = self.ya360.get_user_alias(login)
                     if alias:
-                        return self.get_user_dn(f"{alias}@tion.ru")
+                        return self.get_user_dn(f"{alias}@test.ru")
 
                     raise ValueError(
                         f"Пользователь с логином {login} не найден или найдено несколько записей."

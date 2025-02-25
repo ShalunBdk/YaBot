@@ -342,7 +342,7 @@ class Template:
         self.bot.send_message(
             f'💡 Новое сообщение от {message.user.login}'
             f'\n\n{message.text}',
-            chat_id='0/0/7a69ddd0-8e49-4f1a-966d-927fc89ddb89'
+            chat_id='chat-id'
         )
         self.bot.send_message(
             'Сообщение отправлено',
